@@ -10,23 +10,39 @@ type ToolStr = "caption" | "hook" | "idea" | "hashtag";
 function getLang(value: any): Lang {
   return value === "en" ? "en" : "id";
 }
-
+function resLocals(req: Request) {
+  return (req.res && req.res.locals) || {};
+}
 function getUserId(req: Request): string {
   const id =
     (req as any)?.user?.id ||
     (req as any)?.userId ||
     (resLocals(req)?.user?.id as string | undefined);
-
   if (!id) throw new AppError(401, "Unauthorized");
   return id;
 }
-
-function resLocals(req: Request) {
-  return (req.res && req.res.locals) || {};
-}
-
 function toEnum(tool: ToolStr): ToolEnum {
   return tool as unknown as ToolEnum;
+}
+
+function normalizeAi(raw: unknown): { output: string; model: string } {
+  if (typeof raw === "string") return { output: raw, model: "unknown" };
+
+  if (raw && typeof raw === "object") {
+    const anyRaw = raw as any;
+
+    const output =
+      typeof anyRaw.output === "string"
+        ? anyRaw.output
+        : JSON.stringify(anyRaw);
+    const model =
+      typeof anyRaw.model === "string" && anyRaw.model.trim()
+        ? anyRaw.model
+        : "unknown";
+    return { output, model };
+  }
+
+  return { output: String(raw ?? ""), model: "unknown" };
 }
 
 async function generateAndStore(params: {
@@ -37,21 +53,20 @@ async function generateAndStore(params: {
 }) {
   const { userId, tool, input, lang } = params;
 
-  const result = await aiComplete({
+  const raw = await aiComplete({
     tool,
     input: input.trim(),
     lang,
   });
 
-  const outputText =
-    typeof result === "string" ? result : JSON.stringify(result);
+  const ai = normalizeAi(raw);
 
   const created = await prisma.generation.create({
     data: {
       userId,
       tool: toEnum(tool),
       inputText: input.trim(),
-      outputText,
+      outputText: ai.output,
     },
     select: {
       id: true,
@@ -64,7 +79,16 @@ async function generateAndStore(params: {
     },
   });
 
-  return { created, result: outputText };
+  const result = {
+    tool,
+    lang,
+    output: ai.output,
+    model: ai.model,
+    generationId: created.id,
+    isSaved: created.isSaved,
+  };
+
+  return { created, result };
 }
 
 export async function completion(req: Request, res: Response) {
@@ -85,7 +109,7 @@ export async function completion(req: Request, res: Response) {
   }
 
   const userId = getUserId(req);
-  const { created, result } = await generateAndStore({
+  const { result } = await generateAndStore({
     userId,
     tool,
     input,
@@ -96,20 +120,18 @@ export async function completion(req: Request, res: Response) {
     code: 201,
     status: "success",
     message: "Completion done",
-    data: { result, generation: created },
+    data: { result },
   });
 }
 
-/** POST /api/ai/caption  Body: { input: string, lang?: "id" | "en" } */
 export async function caption(req: Request, res: Response) {
   const { input, lang } = req.body as { input?: string; lang?: Lang };
-
   if (!input || typeof input !== "string" || input.trim().length === 0) {
     throw new AppError(400, "Field 'input' is required");
   }
 
   const userId = getUserId(req);
-  const { created, result } = await generateAndStore({
+  const { result } = await generateAndStore({
     userId,
     tool: "caption",
     input,
@@ -120,20 +142,18 @@ export async function caption(req: Request, res: Response) {
     code: 201,
     status: "success",
     message: "Caption generated",
-    data: { result, generation: created },
+    data: { result },
   });
 }
 
-/** POST /api/ai/hook  Body: { input: string, lang?: "id" | "en" } */
 export async function hook(req: Request, res: Response) {
   const { input, lang } = req.body as { input?: string; lang?: Lang };
-
   if (!input || typeof input !== "string" || input.trim().length === 0) {
     throw new AppError(400, "Field 'input' is required");
   }
 
   const userId = getUserId(req);
-  const { created, result } = await generateAndStore({
+  const { result } = await generateAndStore({
     userId,
     tool: "hook",
     input,
@@ -144,20 +164,18 @@ export async function hook(req: Request, res: Response) {
     code: 201,
     status: "success",
     message: "Hook generated",
-    data: { result, generation: created },
+    data: { result },
   });
 }
 
-/** POST /api/ai/ideas  Body: { input: string, lang?: "id" | "en" } */
 export async function ideas(req: Request, res: Response) {
   const { input, lang } = req.body as { input?: string; lang?: Lang };
-
   if (!input || typeof input !== "string" || input.trim().length === 0) {
     throw new AppError(400, "Field 'input' is required");
   }
 
   const userId = getUserId(req);
-  const { created, result } = await generateAndStore({
+  const { result } = await generateAndStore({
     userId,
     tool: "idea",
     input,
@@ -168,20 +186,18 @@ export async function ideas(req: Request, res: Response) {
     code: 201,
     status: "success",
     message: "Ideas generated",
-    data: { result, generation: created },
+    data: { result },
   });
 }
 
-/** POST /api/ai/hashtags  Body: { input: string, lang?: "id" | "en" } */
 export async function hashtags(req: Request, res: Response) {
   const { input, lang } = req.body as { input?: string; lang?: Lang };
-
   if (!input || typeof input !== "string" || input.trim().length === 0) {
     throw new AppError(400, "Field 'input' is required");
   }
 
   const userId = getUserId(req);
-  const { created, result } = await generateAndStore({
+  const { result } = await generateAndStore({
     userId,
     tool: "hashtag",
     input,
@@ -192,6 +208,6 @@ export async function hashtags(req: Request, res: Response) {
     code: 201,
     status: "success",
     message: "Hashtags generated",
-    data: { result, generation: created },
+    data: { result },
   });
 }

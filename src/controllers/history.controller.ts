@@ -47,3 +47,31 @@ export const getHistory = async (req: Request, res: Response) => {
     data: { items },
   });
 };
+export const toggleSave = async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  if (!userId) throw new AppError(4011, "Unauthorized");
+
+  const { id } = req.params;
+  if (!id) throw new AppError(400, "Generation ID is required");
+
+  const gen = await prisma.generation.findFirst({
+    where: { id, userId },
+  });
+
+  if (!gen) throw new AppError(404, "Generation not found");
+
+  const updated = await prisma.generation.update({
+    where: { id },
+    data: { isSaved: !gen.isSaved },
+    select: {
+      id: true,
+      isSaved: true,
+    },
+  });
+
+  res.status(200).json({
+    code: 200,
+    message: `Generation ${updated.isSaved ? "saved" : "unsaved"}`,
+    data: updated,
+  });
+};
