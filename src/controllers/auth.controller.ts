@@ -132,6 +132,6 @@ export const me = async (req: Request, res: Response) => {
     code: 200,
     status: "success",
     message: "User fetched succesfully",
-    data: user,
+    data: { user },
   });
 };
