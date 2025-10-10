@@ -102,7 +102,7 @@ export const verify = async (req: Request, res: Response) => {
   }
 };
 
-export async function logout(_req: Request, res: Response) {
+export async function logout(req: Request, res: Response) {
   const cookie = serialize("token", "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -118,3 +118,20 @@ export async function logout(_req: Request, res: Response) {
     message: "Logged out",
   });
 }
+
+export const me = async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  if (!userId) throw new AppError(401, "Unauthorized");
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+  if (!user) throw new AppError(404, "User not found");
+
+  res.status(200).json({
+    code: 200,
+    status: "success",
+    message: "User fetched succesfully",
+    data: user,
+  });
+};

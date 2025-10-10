@@ -47,6 +47,7 @@ export const getHistory = async (req: Request, res: Response) => {
     data: { items },
   });
 };
+
 export const toggleSave = async (req: Request, res: Response) => {
   const userId = (req as any).user?.id as string;
   if (!userId) throw new AppError(4011, "Unauthorized");
@@ -73,5 +74,25 @@ export const toggleSave = async (req: Request, res: Response) => {
     code: 200,
     message: `Generation ${updated.isSaved ? "saved" : "unsaved"}`,
     data: updated,
+  });
+};
+
+export const getSaved = async (req: Request, res: Response) => {
+  const userId = (req as any).user?.id as string;
+  if (!userId) throw new AppError(401, "Unauthorized");
+
+  const generations = await prisma.generation.findMany({
+    where: {
+      userId,
+      isSaved: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.status(200).json({
+    code: 200,
+    status: "success",
+    message: "OK",
+    data: generations,
   });
 };
